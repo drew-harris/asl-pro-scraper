@@ -11,22 +11,21 @@ import (
 	"strings"
 
 	"github.com/drew-harris/asl-pro/database"
-	"github.com/fatih/color"
 )
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Print(color.MagentaString("Enter tag to use: "))
+	fmt.Print("Enter tag to use: ")
 	scanner.Scan()
 	tag := scanner.Text()
 	err := database.SaveTag(tag)
 	if err != nil {
 		panic(err)
 	}
-	color.Magenta("Saved tag: " + tag)
+	fmt.Println("Saved tag: " + tag)
 
 	for {
-		fmt.Print(color.CyanString("\n1. Download From Input.txt\n2. Download individual words\n3. Exit\nWhich would you like to do: "))
+		fmt.Print("\n1. Download From Input.txt\n2. Download individual words\n3. Exit\nWhich would you like to do: ")
 		scanner.Scan()
 		choice := scanner.Text()
 		fmt.Print("\n")
@@ -50,17 +49,17 @@ func typeToDownload(scanner *bufio.Scanner, tag string) {
 		}
 		err := downloadWord(word)
 		if err != nil {
-			color.Red(word + ": " + err.Error())
+			fmt.Println(word + ": " + err.Error())
 		} else {
-			color.HiGreen("Downloaded word: " + word)
+			fmt.Println("Downloaded word: " + word)
 			database.SaveWord(word, tag)
-			color.HiGreen("Saved word to DB: " + word)
+			fmt.Println("Saved word to DB: " + word)
 		}
 	}
 }
 
 func downloadFromFile(tag string) {
-	color.HiCyan("Getting words from input.txt")
+	fmt.Println("Getting words from input.txt")
 	words, err := getWords("./input.txt")
 	if err != nil {
 		panic(err)
@@ -70,12 +69,12 @@ func downloadFromFile(tag string) {
 	for _, word := range words {
 		err = downloadWord(word)
 		if err != nil {
-			color.Red(word + ": " + err.Error())
+			fmt.Println(word + ": " + err.Error())
 			missed = append(missed, word)
 		} else {
-			color.HiGreen("Downloaded word: " + word)
+			fmt.Println("Downloaded word: " + word)
 			database.SaveWord(word, tag)
-			color.HiGreen("Saved word to DB: " + word)
+			fmt.Println("Saved word to DB: " + word)
 		}
 	}
 
