@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -9,20 +10,81 @@ import (
 	"os"
 	"strings"
 
+	"github.com/drew-harris/asl-pro/database"
 	"github.com/fatih/color"
 )
 
 func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Print(color.MagentaString("Enter tag to use: "))
+	scanner.Scan()
+	tag := scanner.Text()
+	err := database.SaveTag(tag)
+	if err != nil {
+		panic(err)
+	}
+	color.Magenta("Saved tag: " + tag)
+
+	for {
+		fmt.Print(color.CyanString("\n1. Download From Input.txt\n2. Download individual words\n3. Exit\nWhich would you like to do: "))
+		scanner.Scan()
+		choice := scanner.Text()
+		fmt.Print("\n")
+		if choice == "1" {
+			downloadFromFile(tag)
+		} else if choice == "2" {
+			typeToDownload(scanner, tag)
+		} else {
+			break
+		}
+	}
+}
+
+func typeToDownload(scanner *bufio.Scanner, tag string) {
+	for {
+		fmt.Print("Enter word: ")
+		scanner.Scan()
+		word := scanner.Text()
+		if word == "exit" {
+			break
+		}
+		err := downloadWord(word)
+		if err != nil {
+			color.Red(word + ": " + err.Error())
+		} else {
+			color.HiGreen("Downloaded word: " + word)
+			database.SaveWord(word, tag)
+			color.HiGreen("Saved word to DB: " + word)
+		}
+	}
+}
+
+func downloadFromFile(tag string) {
 	color.HiCyan("Getting words from input.txt")
 	words, err := getWords("./input.txt")
 	if err != nil {
 		panic(err)
 	}
-	missed := downloadWords(words)
+
+	var missed []string
+	for _, word := range words {
+		err = downloadWord(word)
+		if err != nil {
+			color.Red(word + ": " + err.Error())
+			missed = append(missed, word)
+		} else {
+			color.HiGreen("Downloaded word: " + word)
+			database.SaveWord(word, tag)
+			color.HiGreen("Saved word to DB: " + word)
+		}
+	}
+
 	fmt.Println("\n\nManually Required Words: ")
 	for _, word := range missed {
-		fmt.Println("  " + word + "\n")
+		fmt.Println(word)
 	}
+	fmt.Print("\n\n")
+
 }
 
 func getWords(path string) ([]string, error) {
@@ -48,45 +110,32 @@ func getWords(path string) ([]string, error) {
 	return words, nil
 }
 
-func downloadWords(words []string) []string {
+func downloadWord(word string) error {
 	client := &http.Client{}
-	var missed []string
-	for _, word := range words {
-		url := fmt.Sprintf("http://www.aslpro.cc/main/%s/%s.mp4", word[0:1], word)
-		req, _ := http.NewRequest("GET", url, nil)
-		req.Header.Set("Referer", url)
-		res, error := client.Do(req)
-		if error != nil {
-			fmt.Println(error.Error())
-			missed = append(missed, word)
-			color.Red("Could not download word: " + word)
-			continue
-		}
-		defer res.Body.Close()
-		if res.ContentLength < 5000 {
-			missed = append(missed, word)
-			color.Red("Could not download word: " + word)
-			continue
-		}
-
-		out, err := os.Create("./output/" + word + ".mp4")
-		if err != nil {
-			missed = append(missed, word)
-			color.Red("Could not download word: " + word)
-			fmt.Println(color.RedString(err.Error()))
-			continue
-		}
-
-		defer out.Close()
-
-		_, err = io.Copy(out, res.Body)
-		if err != nil {
-			missed = append(missed, word)
-			color.Red("Could not download word: " + word)
-		}
-		color.Green("Downloaded word: " + word)
-
+	url := fmt.Sprintf("http://www.aslpro.cc/main/%s/%s.mp4", word[0:1], word)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Referer", url)
+	res, error := client.Do(req)
+	if error != nil {
+		return errors.New("could not generate http request")
 	}
-	return missed
+	defer res.Body.Close()
+	if res.ContentLength < 5000 {
+		return errors.New("word not found")
+	}
+
+	out, err := os.Create("./output/" + word + ".mp4")
+	if err != nil {
+		return err
+	}
+
+	defer out.Close()
+
+	_, err = io.Copy(out, res.Body)
+	if err != nil {
+		return errors.New("could not copy data to path")
+	}
+
+	return nil
 
 }
